@@ -226,11 +226,9 @@ namespace ExcelLinkProcessor
                         return false;
                     }
 
-                    // Check for required cells
+                    // Check for required board member cell
                     CellReference boardMemberCell = FindCellWithText(recordSheet, BoardMemberIdentifier);
-                    CellReference programDonationCell = FindCellWithText(recordSheet, ProgramDonationIdentifier);
-                    CellReference couponDonationCell = FindCellWithText(recordSheet, CouponDonationIdentifier);
-
+                    
                     if (boardMemberCell == null)
                     {
                         Logger.Error($"'{BoardMemberIdentifier}' cell not found in event file: {eventFilePath}");
@@ -241,24 +239,35 @@ namespace ExcelLinkProcessor
                         Logger.Info($"Event file '{Path.GetFileName(eventFilePath)}': '{BoardMemberIdentifier}' found at {CellReference.ConvertNumToColString(boardMemberCell.Col)}{boardMemberCell.Row + 1}");
                     }
 
-                    if (programDonationCell == null)
-                    {
-                        Logger.Error($"'{ProgramDonationIdentifier}' cell not found in event file: {eventFilePath}");
-                        isValid = false;
-                    }
-                    else
-                    {
-                        Logger.Info($"Event file '{Path.GetFileName(eventFilePath)}': '{ProgramDonationIdentifier}' found at {CellReference.ConvertNumToColString(programDonationCell.Col)}{programDonationCell.Row + 1}");
-                    }
+                    // Check for at least one of the donation identifier cells
+                    CellReference programDonationCell = FindCellWithText(recordSheet, ProgramDonationIdentifier);
+                    CellReference couponDonationCell = FindCellWithText(recordSheet, CouponDonationIdentifier);
 
-                    if (couponDonationCell == null)
+                    if (programDonationCell == null && couponDonationCell == null)
                     {
-                        Logger.Error($"'{CouponDonationIdentifier}' cell not found in event file: {eventFilePath}");
+                        Logger.Error($"Neither '{ProgramDonationIdentifier}' nor '{CouponDonationIdentifier}' cell found in event file: {eventFilePath}");
                         isValid = false;
                     }
                     else
                     {
-                        Logger.Info($"Event file '{Path.GetFileName(eventFilePath)}': '{CouponDonationIdentifier}' found at {CellReference.ConvertNumToColString(couponDonationCell.Col)}{couponDonationCell.Row + 1}");
+                        // Log which donation identifiers were found
+                        if (programDonationCell != null)
+                        {
+                            Logger.Info($"Event file '{Path.GetFileName(eventFilePath)}': '{ProgramDonationIdentifier}' found at {CellReference.ConvertNumToColString(programDonationCell.Col)}{programDonationCell.Row + 1}");
+                        }
+                        else
+                        {
+                            Logger.Warn($"Event file '{Path.GetFileName(eventFilePath)}': '{ProgramDonationIdentifier}' not found, but will continue processing");
+                        }
+
+                        if (couponDonationCell != null)
+                        {
+                            Logger.Info($"Event file '{Path.GetFileName(eventFilePath)}': '{CouponDonationIdentifier}' found at {CellReference.ConvertNumToColString(couponDonationCell.Col)}{couponDonationCell.Row + 1}");
+                        }
+                        else
+                        {
+                            Logger.Warn($"Event file '{Path.GetFileName(eventFilePath)}': '{CouponDonationIdentifier}' not found, but will continue processing");
+                        }
                     }
                 }
             }
@@ -366,39 +375,53 @@ namespace ExcelLinkProcessor
                 // Get board members from event file
                 Dictionary<string, int> eventBoardMembers = GetBoardMembers(eventSheet, eventBoardMemberCell);
 
-                // Process program donations
-                ProcessDonationType(
-                    overviewWorkbook,
-                    programSheet,
-                    eventSheet,
-                    eventFilePath,
-                    eventName,
-                    programBoardMemberCell,
-                    eventBoardMemberCell,
-                    programDonationCell,
-                    programBoardMembers,
-                    eventBoardMembers,
-                    programEvents,
-                    5, // 0-based index, so 5 = column F
-                    "Program Donation"
-                );
+                // Process program donations if the identifier exists
+                if (programDonationCell != null)
+                {
+                    ProcessDonationType(
+                        overviewWorkbook,
+                        programSheet,
+                        eventSheet,
+                        eventFilePath,
+                        eventName,
+                        programBoardMemberCell,
+                        eventBoardMemberCell,
+                        programDonationCell,
+                        programBoardMembers,
+                        eventBoardMembers,
+                        programEvents,
+                        5, // 0-based index, so 5 = column F
+                        "Program Donation"
+                    );
+                }
+                else
+                {
+                    Logger.Info($"Skipping Program Donation processing for event '{eventName}' as the identifier was not found");
+                }
 
-                // Process coupon donations
-                ProcessDonationType(
-                    overviewWorkbook,
-                    couponSheet,
-                    eventSheet,
-                    eventFilePath,
-                    eventName,
-                    couponBoardMemberCell,
-                    eventBoardMemberCell,
-                    couponDonationCell,
-                    couponBoardMembers,
-                    eventBoardMembers,
-                    couponEvents,
-                    6, // 0-based index, so 6 = column G
-                    "Coupon Donation"
-                );
+                // Process coupon donations if the identifier exists
+                if (couponDonationCell != null)
+                {
+                    ProcessDonationType(
+                        overviewWorkbook,
+                        couponSheet,
+                        eventSheet,
+                        eventFilePath,
+                        eventName,
+                        couponBoardMemberCell,
+                        eventBoardMemberCell,
+                        couponDonationCell,
+                        couponBoardMembers,
+                        eventBoardMembers,
+                        couponEvents,
+                        6, // 0-based index, so 6 = column G
+                        "Coupon Donation"
+                    );
+                }
+                else
+                {
+                    Logger.Info($"Skipping Coupon Donation processing for event '{eventName}' as the identifier was not found");
+                }
             }
             catch (Exception ex)
             {
@@ -567,7 +590,7 @@ namespace ExcelLinkProcessor
                 for (int colIndex = 0; colIndex < row.LastCellNum; colIndex++)
                 {
                     ICell cell = row.GetCell(colIndex);
-                    if (cell != null && cell.ToString() == text)
+                    if (cell != null && cell.ToString().Replace("\r\n", string.Empty).Replace("\n", string.Empty) == text)
                     {
                         return new CellReference(rowIndex, colIndex);
                     }
