@@ -474,7 +474,7 @@ namespace ExcelLinkProcessor
                 }
                 
                 ICell headerCell = headerRow.CreateCell(eventColumn);
-                headerCell.SetCellValue(eventName);
+                headerCell.SetCellValue(eventName.Split('_')[0]); // Get substring before underscore
                 
                 // Copy cell style from previous column if possible
                 if (headerRow.GetCell(lastColumn) != null)
@@ -523,6 +523,14 @@ namespace ExcelLinkProcessor
                     }
                     
                     ICell cell = row.CreateCell(eventColumn);
+
+                    // Copy cell style from previous column if possible
+                    if (row.GetCell(startColumn) != null)
+                    {
+                        ICellStyle sourceStyle = row.GetCell(startColumn).CellStyle;
+                        cell.CellStyle = sourceStyle;
+                    }
+
                     cell.SetCellFormula(externalRef);
                     
                     Logger.Info($"{donationType}: Created link for member {memberId} from {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1} to {CellReference.ConvertNumToColString(eventColumn)}{overviewMemberRow + 1}");
