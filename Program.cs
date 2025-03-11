@@ -537,21 +537,65 @@ namespace ExcelLinkProcessor
         private static Dictionary<string, int> GetBoardMembers(ISheet sheet, CellReference boardMemberCell)
         {
             Dictionary<string, int> boardMembers = new Dictionary<string, int>();
+            int expectedMemberCount = 20; // Expected number of board members
+            int foundMemberCount = 0;
             
             int row = boardMemberCell.Row + 1;
-            while (true)
+            int maxRowsToCheck = row + 30; // Check up to 30 rows to find board members
+            
+            while (row < maxRowsToCheck)
             {
                 IRow currentRow = sheet.GetRow(row);
                 if (currentRow == null)
                     break;
                 
                 ICell cell = currentRow.GetCell(boardMemberCell.Col);
-                if (cell == null || string.IsNullOrEmpty(cell.ToString()))
-                    break;
+                if (cell == null)
+                {
+                    row++;
+                    continue;
+                }
                 
-                string memberName = cell.ToString();
-                boardMembers.Add(memberName, row);
+                string cellValue = cell.ToString().Trim();
+                if (string.IsNullOrEmpty(cellValue))
+                {
+                    row++;
+                    continue;
+                }
+                
+                // Check if the cell value matches the expected format: number followed by a dot
+                if (Regex.IsMatch(cellValue, @"^\d+\."))
+                {
+                    boardMembers.Add(cellValue, row);
+                    foundMemberCount++;
+                    Logger.Debug($"Found board member: {cellValue} at row {row + 1}");
+                }
+                else
+                {
+                    // If we've already found some members but this one doesn't match the pattern,
+                    // it might indicate we've reached the end of the member list
+                    if (foundMemberCount > 0)
+                    {
+                        Logger.Debug($"Possible end of board member list at row {row + 1}: '{cellValue}'");
+                        // Don't break immediately, as there might be valid members after this one
+                    }
+                }
+                
                 row++;
+            }
+            
+            // Log warning if we found significantly fewer or more members than expected
+            if (foundMemberCount < expectedMemberCount - 5)
+            {
+                Logger.Warn($"Found only {foundMemberCount} board members, expected around {expectedMemberCount}");
+            }
+            else if (foundMemberCount > expectedMemberCount + 5)
+            {
+                Logger.Warn($"Found {foundMemberCount} board members, which is more than the expected {expectedMemberCount}");
+            }
+            else
+            {
+                Logger.Info($"Found {foundMemberCount} board members");
             }
             
             return boardMembers;
