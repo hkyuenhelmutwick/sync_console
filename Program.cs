@@ -390,7 +390,7 @@ namespace ExcelLinkProcessor
                         programBoardMembers,
                         eventBoardMembers,
                         programEvents,
-                        5, // 0-based index, so 5 = column F
+                        4, // 0-based index, so 5 = column F
                         "Program Donation"
                     );
                 }
@@ -414,7 +414,7 @@ namespace ExcelLinkProcessor
                         couponBoardMembers,
                         eventBoardMembers,
                         couponEvents,
-                        6, // 0-based index, so 6 = column G
+                        5, // 0-based index, so 6 = column G
                         "Coupon Donation"
                     );
                 }
@@ -514,7 +514,7 @@ namespace ExcelLinkProcessor
                     
                     // Create external reference formula
                     // Note: NPOI doesn't directly support external references, so we create a string formula
-                    string externalRef = $"[{Path.GetFileName(eventFilePath)}]{EventRecordSheet}!{CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1}";
+                    string externalRef = $"'{Path.GetDirectoryName(eventFilePath)}\\[{Path.GetFileName(eventFilePath)}]{EventRecordSheet}'!{CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1}";
                     
                     IRow row = overviewSheet.GetRow(overviewMemberRow);
                     if (row == null)
@@ -541,7 +541,7 @@ namespace ExcelLinkProcessor
             int foundMemberCount = 0;
             
             int row = boardMemberCell.Row + 1;
-            int maxRowsToCheck = row + 30; // Check up to 30 rows to find board members
+            int maxRowsToCheck = row + 20; // Check up to 20 rows to find board members
             
             while (row < maxRowsToCheck)
             {
