@@ -528,11 +528,16 @@ namespace ExcelLinkProcessor
                     // Copy cell style from previous column if possible
                     if (row.GetCell(startColumn) != null)
                     {
-                        ICellStyle sourceStyle = row.GetCell(startColumn).CellStyle;
-                        cell.CellStyle = sourceStyle;
+                        cell.CellStyle = row.GetCell(startColumn).CellStyle;
                     }
 
-                    cell.SetCellFormula(externalRef);
+                    ICell eventCell = eventSheet.GetRow(eventMemberRow).GetCell(donationColumn);
+
+                    if (eventCell != null && !string.IsNullOrEmpty(eventCell.ToString()))
+                    {
+                        cell.SetCellFormula(externalRef);
+                    }
+
                     totalSumRow = overviewMemberRow + 1;
                     
                     Logger.Info($"{donationType}: Created link for member {memberId} from {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1} to {CellReference.ConvertNumToColString(eventColumn)}{overviewMemberRow + 1}");
@@ -550,7 +555,7 @@ namespace ExcelLinkProcessor
             }
 
             ICell totalAmountcell = totalAmountRow.CreateCell(eventColumn);
-            totalAmountcell.CellStyle = totalAmountRow.GetCell(startColumn).CellStyle;;
+            totalAmountcell.CellStyle = totalAmountRow.GetCell(startColumn).CellStyle;
             totalAmountcell.SetCellFormula($"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})");
         }
 
