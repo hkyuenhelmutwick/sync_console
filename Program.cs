@@ -446,6 +446,7 @@ namespace ExcelLinkProcessor
             string donationType)
         {
             int eventColumn;
+            int totalSumRow = 0;
 
             // Check if event exists in overview
             if (existingEvents.ContainsKey(eventName))
@@ -532,6 +533,7 @@ namespace ExcelLinkProcessor
                     }
 
                     cell.SetCellFormula(externalRef);
+                    totalSumRow = overviewMemberRow + 1;
                     
                     Logger.Info($"{donationType}: Created link for member {memberId} from {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1} to {CellReference.ConvertNumToColString(eventColumn)}{overviewMemberRow + 1}");
                 }
@@ -540,6 +542,16 @@ namespace ExcelLinkProcessor
                     Logger.Warn($"{donationType}: Board member with ID {memberId} not found in event file {eventName}");
                 }
             }
+
+            IRow totalAmountRow = overviewSheet.GetRow(totalSumRow);
+            if (totalAmountRow == null)
+            {
+                totalAmountRow = overviewSheet.CreateRow(totalSumRow);
+            }
+
+            ICell totalAmountcell = totalAmountRow.CreateCell(eventColumn);
+            totalAmountcell.CellStyle = totalAmountRow.GetCell(startColumn).CellStyle;;
+            totalAmountcell.SetCellFormula($"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})");
         }
 
         private static Dictionary<string, int> GetBoardMembers(ISheet sheet, CellReference boardMemberCell)
