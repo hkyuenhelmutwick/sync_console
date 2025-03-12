@@ -511,8 +511,14 @@ namespace ExcelLinkProcessor
                     IRow eventRow = eventSheet.GetRow(eventMemberRow);
                     ICell eventCell = eventRow?.GetCell(donationColumn);
 
-                    // Get or create the cell
-                    ICell cell = GetOrCreateCell(overviewSheet, overviewMemberRow, eventColumn, startColumn);
+                    // Get or create the cell with currency format
+                    ICell cell = GetOrCreateCell(
+                        overviewSheet, 
+                        overviewMemberRow, 
+                        eventColumn, 
+                        startColumn, 
+                        true, // Apply currency format
+                        overviewWorkbook);
                     
                     // Only create a link if the event cell has a value
                     if (eventCell != null && !string.IsNullOrEmpty(eventCell.ToString()))
@@ -552,10 +558,27 @@ namespace ExcelLinkProcessor
                 {
                     ICell totalLabelCell = GetOrCreateCell(overviewSheet, totalSumRow, 0, startColumn);
                     totalLabelCell.SetCellValue("總計");
+                    
+                    // Make the total label bold
+                    ICellStyle boldStyle = overviewWorkbook.CreateCellStyle();
+                    if (totalLabelCell.CellStyle != null)
+                    {
+                        boldStyle.CloneStyleFrom(totalLabelCell.CellStyle);
+                    }
                 }
                 
-                // Create the total cell with SUM formula
-                ICell totalCell = GetOrCreateCell(overviewSheet, totalSumRow, eventColumn, startColumn);
+                // Create the total cell with SUM formula and currency format
+                ICell totalCell = GetOrCreateCell(
+                    overviewSheet, 
+                    totalSumRow, 
+                    eventColumn, 
+                    startColumn, 
+                    true, // Apply currency format
+                    overviewWorkbook);
+                
+                // Make the total cell bold
+                ICellStyle boldCurrencyStyle = overviewWorkbook.CreateCellStyle();
+                boldCurrencyStyle.CloneStyleFrom(totalCell.CellStyle);
                 
                 // Create SUM formula (from first data row to last board member row)
                 string sumFormula = $"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})";
@@ -572,7 +595,7 @@ namespace ExcelLinkProcessor
             }
         }
 
-        private static ICell GetOrCreateCell(ISheet sheet, int rowIndex, int columnIndex, int styleSourceColumnIndex = -1)
+        private static ICell GetOrCreateCell(ISheet sheet, int rowIndex, int columnIndex, int styleSourceColumnIndex = -1, bool applyCurrencyFormat = false, IWorkbook workbook = null)
         {
             // Get or create the row
             IRow row = sheet.GetRow(rowIndex);
@@ -592,6 +615,27 @@ namespace ExcelLinkProcessor
                 {
                     cell.CellStyle = sourceCell.CellStyle;
                 }
+            }
+            
+            // Apply currency format if requested
+            if (applyCurrencyFormat && workbook != null)
+            {
+                // Create or get a currency style
+                ICellStyle currencyStyle = workbook.CreateCellStyle();
+                
+                // If we copied a style, clone it to preserve other formatting
+                if (cell.CellStyle != null)
+                {
+                    currencyStyle.CloneStyleFrom(cell.CellStyle);
+                }
+                
+                // Create a data format with the currency pattern
+                IDataFormat dataFormat = workbook.CreateDataFormat();
+                short formatId = dataFormat.GetFormat("$#,##0");
+                currencyStyle.DataFormat = formatId;
+                
+                // Apply the style to the cell
+                cell.CellStyle = currencyStyle;
             }
             
             return cell;
