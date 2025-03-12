@@ -467,8 +467,15 @@ namespace ExcelLinkProcessor
                 // Add new event column
                 eventColumn = lastColumn + 1;
                 
-                // Add event name to header
-                ICell headerCell = GetOrCreateCell(overviewSheet, overviewBoardMemberCell.Row, eventColumn, lastColumn);
+                // Add event name to header - center aligned
+                ICell headerCell = GetOrCreateCell(
+                    overviewSheet, 
+                    overviewBoardMemberCell.Row, 
+                    eventColumn, 
+                    lastColumn, 
+                    false, // No currency format for header
+                    true,  // Center align
+                    overviewWorkbook);
                 
                 // Get display name (part before underscore)
                 string displayName = eventName;
@@ -511,13 +518,14 @@ namespace ExcelLinkProcessor
                     IRow eventRow = eventSheet.GetRow(eventMemberRow);
                     ICell eventCell = eventRow?.GetCell(donationColumn);
 
-                    // Get or create the cell with currency format
+                    // Get or create the cell with currency format and center alignment
                     ICell cell = GetOrCreateCell(
                         overviewSheet, 
                         overviewMemberRow, 
                         eventColumn, 
                         startColumn, 
-                        true, // Apply currency format
+                        true,  // Apply currency format
+                        true,  // Center align
                         overviewWorkbook);
                     
                     // Only create a link if the event cell has a value
@@ -556,7 +564,15 @@ namespace ExcelLinkProcessor
                 IRow totalRow = overviewSheet.GetRow(totalSumRow);
                 if (totalRow == null || totalRow.GetCell(0) == null || string.IsNullOrEmpty(totalRow.GetCell(0).ToString()))
                 {
-                    ICell totalLabelCell = GetOrCreateCell(overviewSheet, totalSumRow, 0, startColumn);
+                    ICell totalLabelCell = GetOrCreateCell(
+                        overviewSheet, 
+                        totalSumRow, 
+                        0, 
+                        startColumn, 
+                        false, // No currency format for label
+                        true,  // Center align
+                        overviewWorkbook);
+                        
                     totalLabelCell.SetCellValue("總計");
                     
                     // Make the total label bold
@@ -565,20 +581,24 @@ namespace ExcelLinkProcessor
                     {
                         boldStyle.CloneStyleFrom(totalLabelCell.CellStyle);
                     }
+                    
+                    totalLabelCell.CellStyle = boldStyle;
                 }
                 
-                // Create the total cell with SUM formula and currency format
+                // Create the total cell with SUM formula, currency format, and center alignment
                 ICell totalCell = GetOrCreateCell(
                     overviewSheet, 
                     totalSumRow, 
                     eventColumn, 
                     startColumn, 
-                    true, // Apply currency format
+                    true,  // Apply currency format
+                    true,  // Center align
                     overviewWorkbook);
                 
                 // Make the total cell bold
                 ICellStyle boldCurrencyStyle = overviewWorkbook.CreateCellStyle();
                 boldCurrencyStyle.CloneStyleFrom(totalCell.CellStyle);
+                totalCell.CellStyle = boldCurrencyStyle;
                 
                 // Create SUM formula (from first data row to last board member row)
                 string sumFormula = $"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})";
@@ -595,7 +615,7 @@ namespace ExcelLinkProcessor
             }
         }
 
-        private static ICell GetOrCreateCell(ISheet sheet, int rowIndex, int columnIndex, int styleSourceColumnIndex = -1, bool applyCurrencyFormat = false, IWorkbook workbook = null)
+        private static ICell GetOrCreateCell(ISheet sheet, int rowIndex, int columnIndex, int styleSourceColumnIndex = -1, bool applyCurrencyFormat = false, bool centerAlign = false, IWorkbook workbook = null)
         {
             // Get or create the row
             IRow row = sheet.GetRow(rowIndex);
@@ -617,25 +637,34 @@ namespace ExcelLinkProcessor
                 }
             }
             
-            // Apply currency format if requested
-            if (applyCurrencyFormat && workbook != null)
+            // Apply custom formatting if requested
+            if ((applyCurrencyFormat || centerAlign) && workbook != null)
             {
-                // Create or get a currency style
-                ICellStyle currencyStyle = workbook.CreateCellStyle();
+                // Create a new style
+                ICellStyle newStyle = workbook.CreateCellStyle();
                 
                 // If we copied a style, clone it to preserve other formatting
                 if (cell.CellStyle != null)
                 {
-                    currencyStyle.CloneStyleFrom(cell.CellStyle);
+                    newStyle.CloneStyleFrom(cell.CellStyle);
                 }
                 
-                // Create a data format with the currency pattern
-                IDataFormat dataFormat = workbook.CreateDataFormat();
-                short formatId = dataFormat.GetFormat("$#,##0");
-                currencyStyle.DataFormat = formatId;
+                // Apply currency format if requested
+                if (applyCurrencyFormat)
+                {
+                    IDataFormat dataFormat = workbook.CreateDataFormat();
+                    short formatId = dataFormat.GetFormat("$#,##0");
+                    newStyle.DataFormat = formatId;
+                }
+                
+                // Apply center alignment if requested
+                if (centerAlign)
+                {
+                    newStyle.Alignment = HorizontalAlignment.Center;
+                }
                 
                 // Apply the style to the cell
-                cell.CellStyle = currencyStyle;
+                cell.CellStyle = newStyle;
             }
             
             return cell;
