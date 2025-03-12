@@ -383,7 +383,7 @@ namespace ExcelLinkProcessor
                         programSheet,
                         eventSheet,
                         eventFilePath,
-                        eventName,
+                        eventName.Split('_')[0],
                         programBoardMemberCell,
                         eventBoardMemberCell,
                         programDonationCell,
@@ -407,7 +407,7 @@ namespace ExcelLinkProcessor
                         couponSheet,
                         eventSheet,
                         eventFilePath,
-                        eventName,
+                        eventName.Split('_')[0],
                         couponBoardMemberCell,
                         eventBoardMemberCell,
                         couponDonationCell,
@@ -468,24 +468,18 @@ namespace ExcelLinkProcessor
                 eventColumn = lastColumn + 1;
                 
                 // Add event name to header
-                IRow headerRow = overviewSheet.GetRow(overviewBoardMemberCell.Row);
-                if (headerRow == null)
-                {
-                    headerRow = overviewSheet.CreateRow(overviewBoardMemberCell.Row);
-                }
+                ICell headerCell = GetOrCreateCell(overviewSheet, overviewBoardMemberCell.Row, eventColumn, lastColumn);
                 
-                ICell headerCell = headerRow.CreateCell(eventColumn);
-                headerCell.SetCellValue(eventName.Split('_')[0]); // Get substring before underscore
-                
-                // Copy cell style from previous column if possible
-                if (headerRow.GetCell(lastColumn) != null)
+                // Get display name (part before underscore)
+                string displayName = eventName;
+                if (eventName.Contains('_'))
                 {
-                    ICellStyle sourceStyle = headerRow.GetCell(lastColumn).CellStyle;
-                    headerCell.CellStyle = sourceStyle;
+                    displayName = eventName.Split('_')[0];
                 }
+                headerCell.SetCellValue(displayName);
                 
                 existingEvents.Add(eventName, eventColumn);
-                Logger.Info($"{donationType}: Added new event '{eventName}' at column {CellReference.ConvertNumToColString(eventColumn)}");
+                Logger.Info($"{donationType}: Added new event '{displayName}' at column {CellReference.ConvertNumToColString(eventColumn)}");
             }
 
             // Create formula links for each board member
@@ -513,50 +507,94 @@ namespace ExcelLinkProcessor
                     // Find donation amount cell in event file
                     int donationColumn = donationTypeCell.Col;
                     
-                    // Create external reference formula
-                    // Note: NPOI doesn't directly support external references, so we create a string formula
-                    string externalRef = $"'{Path.GetDirectoryName(eventFilePath)}\\[{Path.GetFileName(eventFilePath)}]{EventRecordSheet}'!{CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1}";
+                    // Get the event cell to check if it has a value
+                    IRow eventRow = eventSheet.GetRow(eventMemberRow);
+                    ICell eventCell = eventRow?.GetCell(donationColumn);
+
+                    // Get or create the cell
+                    ICell cell = GetOrCreateCell(overviewSheet, overviewMemberRow, eventColumn, startColumn);
                     
-                    IRow row = overviewSheet.GetRow(overviewMemberRow);
-                    if (row == null)
-                    {
-                        row = overviewSheet.CreateRow(overviewMemberRow);
-                    }
-                    
-                    ICell cell = row.CreateCell(eventColumn);
-
-                    // Copy cell style from previous column if possible
-                    if (row.GetCell(startColumn) != null)
-                    {
-                        cell.CellStyle = row.GetCell(startColumn).CellStyle;
-                    }
-
-                    ICell eventCell = eventSheet.GetRow(eventMemberRow).GetCell(donationColumn);
-
+                    // Only create a link if the event cell has a value
                     if (eventCell != null && !string.IsNullOrEmpty(eventCell.ToString()))
                     {
-                        cell.SetCellFormula(externalRef);
+                        // Create external reference formula
+                        string externalRef = $"'{Path.GetDirectoryName(eventFilePath)}\\[{Path.GetFileName(eventFilePath)}]{EventRecordSheet}'!{CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1}";
+                        
+                        try
+                        {
+                            cell.SetCellFormula(externalRef);
+                            Logger.Info($"{donationType}: Created link for member {memberId} ({overviewMember.Key}) from {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1} to {CellReference.ConvertNumToColString(eventColumn)}{overviewMemberRow + 1}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"Error setting formula for member {memberId}: {ex.Message}. Formula: {externalRef}");
+                        }
                     }
-
-                    totalSumRow = overviewMemberRow + 1;
+                    else
+                    {
+                        Logger.Debug($"{donationType}: Skipping empty cell for member {memberId} at {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1}");
+                    }
                     
-                    Logger.Info($"{donationType}: Created link for member {memberId} from {CellReference.ConvertNumToColString(donationColumn)}{eventMemberRow + 1} to {CellReference.ConvertNumToColString(eventColumn)}{overviewMemberRow + 1}");
+                    totalSumRow = overviewMemberRow + 1;
                 }
                 else
                 {
-                    Logger.Warn($"{donationType}: Board member with ID {memberId} not found in event file {eventName}");
+                    Logger.Warn($"{donationType}: Board member with ID {memberId} ({overviewMember.Key}) not found in event file {eventName}");
                 }
             }
 
-            IRow totalAmountRow = overviewSheet.GetRow(totalSumRow);
-            if (totalAmountRow == null)
+            // Create total row if we found board members
+            if (totalSumRow > 0)
             {
-                totalAmountRow = overviewSheet.CreateRow(totalSumRow);
+                // Add "Total" label in the first column if it doesn't exist
+                IRow totalRow = overviewSheet.GetRow(totalSumRow);
+                if (totalRow == null || totalRow.GetCell(0) == null || string.IsNullOrEmpty(totalRow.GetCell(0).ToString()))
+                {
+                    ICell totalLabelCell = GetOrCreateCell(overviewSheet, totalSumRow, 0, startColumn);
+                    totalLabelCell.SetCellValue("總計");
+                }
+                
+                // Create the total cell with SUM formula
+                ICell totalCell = GetOrCreateCell(overviewSheet, totalSumRow, eventColumn, startColumn);
+                
+                // Create SUM formula (from first data row to last board member row)
+                string sumFormula = $"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})";
+                
+                try
+                {
+                    totalCell.SetCellFormula(sumFormula);
+                    Logger.Info($"{donationType}: Created total formula at {CellReference.ConvertNumToColString(eventColumn)}{totalSumRow + 1}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Error setting total formula: {ex.Message}. Formula: {sumFormula}");
+                }
             }
+        }
 
-            ICell totalAmountcell = totalAmountRow.CreateCell(eventColumn);
-            totalAmountcell.CellStyle = totalAmountRow.GetCell(startColumn).CellStyle;
-            totalAmountcell.SetCellFormula($"SUM({CellReference.ConvertNumToColString(eventColumn)}{overviewBoardMemberCell.Row + 2}:{CellReference.ConvertNumToColString(eventColumn)}{totalSumRow})");
+        private static ICell GetOrCreateCell(ISheet sheet, int rowIndex, int columnIndex, int styleSourceColumnIndex = -1)
+        {
+            // Get or create the row
+            IRow row = sheet.GetRow(rowIndex);
+            if (row == null)
+            {
+                row = sheet.CreateRow(rowIndex);
+            }
+            
+            // Create the cell
+            ICell cell = row.CreateCell(columnIndex);
+            
+            // Copy style from source column if specified
+            if (styleSourceColumnIndex >= 0)
+            {
+                ICell sourceCell = row.GetCell(styleSourceColumnIndex);
+                if (sourceCell != null && sourceCell.CellStyle != null)
+                {
+                    cell.CellStyle = sourceCell.CellStyle;
+                }
+            }
+            
+            return cell;
         }
 
         private static Dictionary<string, int> GetBoardMembers(ISheet sheet, CellReference boardMemberCell)
